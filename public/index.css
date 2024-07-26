@@ -1,0 +1,31 @@
+.wrapper {
+  height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.typing-demo {
+  width: fit-content; /* Adjust width to fit content */
+  white-space: nowrap;
+  overflow: hidden;
+  font-family: monospace;
+  font-size: 2em;
+  position: relative; /* Position relative for border pseudo-element */
+}
+
+.typing-demo::after {
+  content: ''; /* Create a pseudo-element for the border */
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 3px; /* Adjust border width as needed */
+  background-color: black; /* Set border color */
+  animation: blink .5s step-end infinite alternate; /* Blink animation */
+}
+
+@keyframes blink {
+  50% {
+    background-color: transparent; /* Blink effect */
+  }
+}

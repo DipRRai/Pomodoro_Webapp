@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3"
+      crossorigin="anonymous"
+    />
+    <title>Dashboard</title>
+  </head>
+
+  <body>
+    <!-- start here -->
+    <%- include('navbar.ejs') %>
+    <!-- end here -->
+    <div class="main-body" style="padding: 8px">
+      <div style="display: flex; justify-content: center">
+        <div style="flex-grow: 4">
+          <h1>Welcome <%= username %></h1>
+          <h2>You have <%= coins %> coins</h2>
+        </div>
+        <div
+          id="clock"
+          class="fs-1 fw-bold"
+          style="
+            flex-grow: 1;
+            display: flex;
+            justify-content: right;
+            align-items: center;
+          "
+        ></div>
+      </div>
+    </div>
+
+    <div class="dropdown" style="padding: 10px; display: flex">
+      <div style="flex-grow: 6">
+        <button
+          class="btn btn-secondary dropdown-toggle"
+          type="button"
+          id="timerDropdownButton"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          Select Timer
+        </button>
+        <ul
+          class="dropdown-menu"
+          aria-labelledby="timerDropdownButton"
+          id="timerDropdownMenu"
+        >
+          <% programs.forEach(function(program) { %>
+          <li>
+            <a
+              class="dropdown-item"
+              href="/timerdata/<%= program._id %>"
+              data-program="<%= JSON.stringify(program) %>"
+            >
+              <%= program.name %>
+            </a>
+          </li>
+          <% }); %>
+        </ul>
+        <div
+          class="border rounded-start rounded-end p-3 mt-2"
+          id="timer-holder"
+        >
+          <h1 id="timer-name"><%= timers[0].name %></h1>
+          <h2 id="timer-display"><%= timers[0].duration %> minutes</h2>
+          <button
+            type="button"
+            class="btn btn-success"
+            data-timers="<%= JSON.stringify(timers) %>"
+            onclick="startTimer(this)"
+          >
+            Start
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            data-timers="<%= JSON.stringify(timers) %>"
+            onclick="deleteTimers(this)"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+      <!-- Sidebar goes here -->
+      <div
+        id="sidebar"
+        class="border border-primary rounded"
+        style="
+          display: flexbox;
+          flex-grow: 1;
+          padding: 8px;
+          margin-left: 5px;
+          margin-top: 45px;
+        "
+      ></div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        var dueDates = <%- JSON.stringify(dueDates) %>;
+        var sidebar = document.getElementById("sidebar");
+        sidebar.innerHTML = "";
+
+        dueDates.forEach((element) => {
+          var dueDateElement = document.createElement("div");
+          dueDateElement.classList.add("due-date-item");
+
+          var titleElement = document.createElement("h4");
+          titleElement.style.margin = 0;
+          titleElement.textContent = `${element.title}`;
+
+          var descriptionElement = document.createElement("p");
+          descriptionElement.textContent = `${element.description}`;
+          descriptionElement.style.margin = 0;
+
+          var dateElement = document.createElement("p");
+          var dueDate = new Date(element.dateTime);
+          dateElement.textContent = `Due Date: ${dueDate.toLocaleDateString('en-GB')}`;
+          dateElement.style.margin = 0;
+
+          var countdownElement = document.createElement("p");
+          countdownElement.classList.add("countdown");
+          updateCountdown(dueDate, countdownElement); // Initialize the countdown
+          setInterval(() => updateCountdown(dueDate, countdownElement), 1000); // Update countdown every second
+
+          dueDateElement.appendChild(titleElement);
+          dueDateElement.appendChild(descriptionElement);
+          dueDateElement.appendChild(dateElement);
+          dueDateElement.appendChild(countdownElement);
+          sidebar.appendChild(dueDateElement);
+        });
+      });
+
+      function updateCountdown(dueDate, element) {
+        var now = new Date();
+        var distance = dueDate - now;
+
+        if (distance < 0) {
+          element.textContent = "Due date has passed.";
+          return;
+        }
+
+        var days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        element.textContent = `Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+      }
+
+      function startTimer(button) {
+        const timerList = JSON.parse(button.getAttribute("data-timers"));
+        console.log(timerList);
+        startSequentialTimers(timerList, 0, 0);
+      }
+
+      async function deleteTimers(button) {
+        console.log(button);
+        try {
+          const timers = JSON.parse(button.dataset.timers);
+          const programID = timers[0].programID; // Assuming all timers belong to the same program
+
+          const response = await fetch(`/delete-program/${programID}`, {
+            method: "POST",
+          });
+          if (!response.ok) {
+            throw new Error("Failed to delete program");
+          } else {
+            console.log("Program deleted successfully");
+            location.href = "/dashboard"; // Redirect to the dashboard on success
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      async function startSequentialTimers(timerList, index, sum) {
+        if (index >= timerList.length) {
+          try {
+            const response = await fetch("/play-sound");
+            if (!response.ok) {
+              throw new Error("Failed to fetch sound");
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audio.play();
+          } catch (error) {
+            console.error("Error playing sound:", error);
+            // Handle error as needed
+          }
+          incrementCoins(sum);
+          //alert("All timers have completed.");
+          return;
+        } else {
+          sum += timerList[index].duration * 2;
+        }
+
+        const currentTimer = timerList[index];
+        const duration = currentTimer.duration * 60; // Convert minutes to seconds
+        var timer = duration,
+          minutes,
+          seconds;
+        var display = document.getElementById("timer-display");
+        var timerNameDisplay = document.getElementById("timer-name");
+        var timerHolder = document.getElementById("timer-holder");
+        timerNameDisplay.textContent = currentTimer.name;
+        console.log(currentTimer.name);
+        if (currentTimer.name === "study") {
+          timerHolder.style.backgroundColor = "lightgreen";
+        } else {
+          timerHolder.style.backgroundColor = "#4cc9f0";
+        }
+        var interval = setInterval(function () {
+          minutes = Math.floor(timer / 60);
+          seconds = timer % 60;
+
+          minutes = minutes < 10 ? "0" + minutes : minutes;
+          seconds = seconds < 10 ? "0" + seconds : seconds;
+
+          display.textContent = minutes + ":" + seconds;
+
+          if (--timer < 0) {
+            clearInterval(interval);
+            startSequentialTimers(timerList, index + 1, sum); // Start the next timer
+          }
+        }, 1000);
+      }
+
+      function updateClock() {
+        const now = new Date();
+        const hours = now.getHours().toString().padStart(2, "0");
+        const minutes = now.getMinutes().toString().padStart(2, "0");
+        const seconds = now.getSeconds().toString().padStart(2, "0");
+        const timeString = `${hours}:${minutes}:${seconds}`;
+
+        document.getElementById("clock").textContent = timeString;
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      async function incrementCoins(coins_earned) {
+        try {
+          let response = await fetch("/increment-coins", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ coins: coins_earned }), // Send coins as JSON data
+          });
+
+          if (response.ok) {
+            return;
+          } else {
+            alert("Failed to increment coins.");
+          }
+        } catch (error) {
+          alert("Error: " + error.message);
+        }
+      }
+    </script>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p"
+      crossorigin="anonymous"
+    ></script>
+  </body>
+</html>
